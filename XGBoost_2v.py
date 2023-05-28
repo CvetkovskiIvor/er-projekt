@@ -4,24 +4,22 @@ import xgboost as xgb
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, RandomizedSearchCV
 
 pd.set_option('display.max_columns', None)
-
 
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+
 def data_visualisation(data: pd.DataFrame):
     dow_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-
 
     correlation = data.corr().abs()
     plt.figure(figsize=(20, 10))
     sns.heatmap(correlation, annot=True)
     plt.show()
-
 
     plt.figure(figsize=(12, 3))
 
@@ -73,7 +71,6 @@ def feature_engineer(data: pd.DataFrame):
     data["dropoff_datetime"] = pd.to_datetime(data["dropoff_datetime"], format='%Y-%m-%d %H:%M:%S')
     data["pickup_datetime"] = pd.to_datetime(data["pickup_datetime"], format='%Y-%m-%d %H:%M:%S')
 
-
     data["pickup_month"] = data["pickup_datetime"].dt.month
     data["pickup_day"] = data["pickup_datetime"].dt.day
     data["pickup_weekday"] = data["pickup_datetime"].dt.weekday
@@ -90,6 +87,7 @@ def feature_engineer(data: pd.DataFrame):
     data.loc[data['trip_duration'] < m - 2 * s, 'trip_duration'] = m - 2 * s
     data.loc[data['trip_duration'] > m + 2 * s, 'trip_duration'] = m + 2 * s
 
+    # Convert trip distance from longitude and latitude differences to Manhattan distance.
     data["trip_distance"] = 0.621371 * 6371 * (abs(2 * np.arctan2(
         np.sqrt(
             np.square(np.sin((abs(data["latitude_difference"]) * np.pi / 180) / 2))
@@ -97,15 +95,16 @@ def feature_engineer(data: pd.DataFrame):
             1 - (np.square(np.sin((abs(data["latitude_difference"]) * np.pi / 180) / 2)))
         )
     )) +
-                                                abs(2 * np.arctan2(
-                                                    np.sqrt(
-                                                        np.square(
-                                                            np.sin((abs(data["longitude_difference"]) * np.pi / 180) / 2))
-                                                    ), np.sqrt(
-                                                        1 - (np.square(
-                                                            np.sin((abs(data["longitude_difference"]) * np.pi / 180) / 2)))
-                                                    )
-                                                )))
+    abs(2 * np.arctan2(
+        np.sqrt(
+            np.square(np.sin(
+                (abs(data["longitude_difference"]) * np.pi / 180) / 2))
+        ), np.sqrt(
+            1 - (np.square(np.sin(
+                (abs(data["longitude_difference"]) * np.pi / 180) / 2)))
+        )
+    )))
+
 
 
 def xgb_model(X: pd.DataFrame, y: pd.Series) -> xgb.Booster:
@@ -155,6 +154,31 @@ if __name__ == '__main__':
     data_visualisation(taxiDB)
     X = taxiDB.drop(["trip_duration", "id", "vendor_id", "pickup_datetime", "dropoff_datetime"], axis=1)
     y = taxiDB["trip_duration"]
+
+
+    # Finding best parameters for the model
+    # param_grid = {
+    #     'booster': ['gbtree'],
+    #     'objective': ['reg:linear'],
+    #     'learning_rate': [0.01, 0.05, 0.1, 0.2],
+    #     'max_depth': [5, 10, 15, 20],
+    #     'subsample': [0.6, 0.7, 0.8, 0.9],
+    #     'colsample_bytree': [0.6, 0.7, 0.8, 0.9],
+    #     'colsample_bylevel': [0.6, 0.7, 0.8, 0.9],
+    #     'silent': [1],
+    # }
+    #
+    # # Create the XGBoost regressor
+    # xgb_model = xgb.XGBRegressor()
+    #
+    # # Perform randomized search
+    # randomized_search = RandomizedSearchCV(estimator=xgb_model, param_distributions=param_grid, n_iter=10,
+    #                                        scoring='neg_root_mean_squared_error', cv=3, verbose=2, random_state=42)
+    # randomized_search.fit(X_train, y_train)
+    #
+    # # Print the best parameters and best score
+    # print("Best Parameters: ", randomized_search.best_params_)
+
     xgb_model = xgb_model(X, y)
     filename = "xgb_model2.xgb"
     xgb_model.save_model(filename)
